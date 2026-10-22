@@ -164,6 +164,38 @@ try {
   env.DEMO_PASSWORD = randomBytes(24).toString("hex");
   await start();
   // Ordinary startup preserves hashes: replacing only the env var must not grant login.
+  async function diagnose() {
+    const diagnostic = spawn(
+      process.execPath,
+      ["--import", "tsx", "scripts/check-demo-login.mjs"],
+      {
+        cwd: directory,
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let output = "";
+    diagnostic.stdout.on("data", (data) => {
+      output += data.toString();
+    });
+    diagnostic.stderr.on("data", (data) => {
+      output += data.toString();
+    });
+    const [code] = await once(diagnostic, "exit");
+    assert(
+      !output.includes(env.DEMO_PASSWORD),
+      "Diagnostic must not print the configured password.",
+    );
+    return { code, output };
+  }
+  const rejectedDiagnostic = await diagnose();
+  assert.equal(rejectedDiagnostic.code, 1);
+  assert(
+    rejectedDiagnostic.output.includes(
+      "DEMO_PASSWORD matches stored account: false",
+    ),
+  );
+  assert(rejectedDiagnostic.output.includes("Login API HTTP status: 401"));
   await session(env.DEMO_PASSWORD, 401);
   await session(previousPassword, 200);
   const fixture = new pg.Client({ connectionString: dbUrl.toString() });
@@ -248,6 +280,19 @@ try {
   } finally {
     await fixture.end();
   }
+  const acceptedDiagnostic = await diagnose();
+  assert.equal(acceptedDiagnostic.code, 0);
+  assert(
+    acceptedDiagnostic.output.includes(
+      "DEMO_PASSWORD matches stored account: true",
+    ),
+  );
+  assert(acceptedDiagnostic.output.includes("Login API HTTP status: 200"));
+  assert(
+    acceptedDiagnostic.output.includes(
+      "Authenticated session HTTP status: 200",
+    ),
+  );
   cookie = await session();
   const restarted = await (
     await fetch(base + "/api/resource/state", { headers: { Cookie: cookie } })

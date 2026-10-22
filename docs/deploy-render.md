@@ -2,7 +2,7 @@
 
 The root `render.yaml` Blueprint defines one Node web service, one managed PostgreSQL database and a persistent disk for evidence/journals. This is an authenticated demonstration with fictional records. The selected persistent service and database plans are paid; Render shows current pricing before creating resources. Review those prices in your account. There is no physical valve actuation.
 
-The database declares 5 GB of storage explicitly (`diskSizeGB: 5`). This is separate from the web service's 1 GB evidence disk.
+The database storage capacity is managed in Render. The Blueprint leaves it unspecified so a later sync does not request a smaller disk than the one already provisioned. This is separate from the web service's 1 GB evidence disk.
 
 ## Create the services
 
@@ -39,6 +39,8 @@ To explicitly synchronize the eight built-in demonstration accounts with the cur
    ```
 
 3. Wait for `Demonstration passwords synchronized for 8 accounts`, then sign in with `admin@axiom.demo` and the current DEMO_PASSWORD. No restart is needed after the command.
+
+If login still fails after recovery, run `npm run demo:login:check` in the same Render Shell. It reports whether the admin account exists, is active, matches the configured password, and whether the local login API and session succeed. It prints only booleans, HTTP statuses and known error messages, logs out its test session, and never prints the password or cookie. Share that diagnostic output together with the exact failed Blueprint sync error.
 
 The command requires ALLOW_DEMO_SEED=true, targets only the eight known demo accounts within the AXIOM-DEMO tenant and revokes their existing sessions. It preserves disabled flags, custom accounts, cargo data, documents, tokens and audit history. It logs the recovery event but never password values or hashes. Do not paste the secret into a terminal command or chat.
 
