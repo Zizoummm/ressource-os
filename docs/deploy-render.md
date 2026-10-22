@@ -23,6 +23,25 @@ The Blueprint generates `DRT_SECRET` and `DEMO_PASSWORD`, binds `DATABASE_URL` t
 
 The demo seed is enabled explicitly with `ALLOW_DEMO_SEED=true`. It preserves existing records on restart. Changing DEMO_PASSWORD later does **not** reset existing account hashes; keep the generated value stable or implement an explicit password-reset workflow. Keep DRT_SECRET stable to preserve verification of issued tokens.
 
+## Recover a rejected demonstration password
+
+If login returns **Invalid email or password**, confirm the username is exactly `admin@axiom.demo` and copy the unmasked DEMO_PASSWORD value from the **web service's Environment settings**. Do not copy the database password or a masked placeholder.
+
+DEMO_PASSWORD initializes account hashes only when the database is first seeded. Replacing this variable later does not change existing hashes. Ordinary restarts deliberately preserve passwords.
+
+To explicitly synchronize the eight built-in demonstration accounts with the current environment value:
+
+1. Wait for the deployment containing `scripts/sync-demo-passwords.ts` to be **Live** (or use Manual Deploy → Deploy latest commit).
+2. Open **axiom-resourceos-test → Shell** and run:
+
+   ```sh
+   npm run demo:password:sync
+   ```
+
+3. Wait for `Demonstration passwords synchronized for 8 accounts`, then sign in with `admin@axiom.demo` and the current DEMO_PASSWORD. No restart is needed after the command.
+
+The command requires ALLOW_DEMO_SEED=true, targets only the eight known demo accounts within the AXIOM-DEMO tenant and revokes their existing sessions. It preserves disabled flags, custom accounts, cargo data, documents, tokens and audit history. It logs the recovery event but never password values or hashes. Do not paste the secret into a terminal command or chat.
+
 ## Test the instance
 
 - Sign in as operator and open ARRS; the first demo cargo has a complete authorization path, the second is blocked, and the third has revoked evidence.

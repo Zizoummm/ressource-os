@@ -91,13 +91,24 @@ try {
       clearTimeout(timeout);
     }
   }
-  async function session() {
+  async function session(
+    suppliedPassword = env.DEMO_PASSWORD,
+    expectedStatus = 200,
+  ) {
     const result = await fetch(base + "/api/auth/login", {
       method: "POST",
       headers: { Origin: origin, "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "regulator@axiom.demo", password }),
+      body: JSON.stringify({
+        email: "regulator@axiom.demo",
+        password: suppliedPassword,
+      }),
     });
-    assert.equal(result.status, 200, result.ok ? "" : await result.text());
+    assert.equal(
+      result.status,
+      expectedStatus,
+      result.status === expectedStatus ? "" : await result.text(),
+    );
+    if (expectedStatus !== 200) return;
     const cookie = result.headers.get("set-cookie");
     assert(cookie.includes("Secure"));
     assert(cookie.includes("HttpOnly"));
@@ -148,7 +159,95 @@ try {
     "VALID",
   );
   await stop();
+  const previousCookie = cookie;
+  const previousPassword = env.DEMO_PASSWORD;
+  env.DEMO_PASSWORD = randomBytes(24).toString("hex");
   await start();
+  // Ordinary startup preserves hashes: replacing only the env var must not grant login.
+  await session(env.DEMO_PASSWORD, 401);
+  await session(previousPassword, 200);
+  const fixture = new pg.Client({ connectionString: dbUrl.toString() });
+  await fixture.connect();
+  try {
+    const before = await fixture.query(
+      'SELECT "passwordHash" FROM "User" WHERE email=$1',
+      ["admin@axiom.demo"],
+    );
+    const membership = await fixture.query(
+      'SELECT "organizationId" FROM "OrganizationMembership" WHERE "userId"=(SELECT id FROM "User" WHERE email=$1)',
+      ["admin@axiom.demo"],
+    );
+    await fixture.query(
+      'INSERT INTO "User" (id,email,name,"passwordHash") VALUES ($1,$2,$3,$4)',
+      [
+        "hosted-custom-user",
+        "custom@axiom.demo",
+        "Custom account",
+        before.rows[0].passwordHash,
+      ],
+    );
+    await fixture.query(
+      'INSERT INTO "OrganizationMembership" (id,"userId","organizationId",roles) VALUES ($1,$2,$3,$4)',
+      [
+        "hosted-custom-membership",
+        "hosted-custom-user",
+        membership.rows[0].organizationId,
+        ["AUDITOR"],
+      ],
+    );
+    await fixture.query('UPDATE "User" SET active=false WHERE email=$1', [
+      "auditor@axiom.demo",
+    ]);
+    async function recover(overrides = {}) {
+      const recovery = spawn(
+        process.execPath,
+        ["--import", "tsx", "scripts/sync-demo-passwords.ts"],
+        {
+          cwd: directory,
+          env: { ...env, ...overrides },
+          stdio: ["ignore", logs.fd, logs.fd],
+        },
+      );
+      const [code] = await once(recovery, "exit");
+      return code;
+    }
+    assert.equal(await recover({ ALLOW_DEMO_SEED: "false" }), 1);
+    await session(previousPassword, 200);
+    assert.equal(await recover(), 0);
+    await session(previousPassword, 401);
+    assert.equal(
+      (
+        await fetch(base + "/api/resource/state", {
+          headers: { Cookie: previousCookie },
+        })
+      ).status,
+      401,
+    );
+    const custom = await fixture.query(
+      'SELECT "passwordHash" FROM "User" WHERE id=$1',
+      ["hosted-custom-user"],
+    );
+    assert(
+      custom.rows[0].passwordHash === before.rows[0].passwordHash,
+      "Custom account must retain its existing password hash.",
+    );
+    const disabled = await fixture.query(
+      'SELECT active FROM "User" WHERE email=$1',
+      ["auditor@axiom.demo"],
+    );
+    assert.equal(disabled.rows[0].active, false);
+    const audit = await fixture.query(
+      'SELECT metadata FROM "AuditEvent" WHERE action=$1',
+      ["DEMO_PASSWORDS_SYNCHRONIZED"],
+    );
+    assert.equal(audit.rowCount, 1);
+    assert(
+      !JSON.stringify(audit.rows).includes(env.DEMO_PASSWORD),
+      "Recovery audit must not contain the password.",
+    );
+  } finally {
+    await fixture.end();
+  }
   cookie = await session();
   const restarted = await (
     await fetch(base + "/api/resource/state", { headers: { Cookie: cookie } })
@@ -173,7 +272,7 @@ try {
     "VALID",
   );
   console.log(
-    "Hosted deployment check passed: fresh database migrations and seed without .env, HTTPS-origin authentication, Secure cookies, persistent evidence, token verification and restart.",
+    "Hosted deployment check passed: fresh database migrations and seed without .env, HTTPS authentication, persistence, restart and explicit credential recovery without changing custom or disabled accounts.",
   );
   await stop();
   completed = true;

@@ -15,7 +15,8 @@
     "test:integration": "node --env-file=.env --import tsx scripts/integration.ts",
     "setup": "node scripts/init-resourceos.mjs && docker compose up -d --wait db && prisma generate && npm run db:migrate && npm run db:seed",
     "start:hosted": "node scripts/start-hosted.mjs",
-    "test:hosted": "node --env-file=.env scripts/test-hosted.mjs"
+    "test:hosted": "node --env-file=.env scripts/test-hosted.mjs",
+    "demo:password:sync": "node --env-file-if-exists=.env --import tsx scripts/sync-demo-passwords.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^6.19.3",

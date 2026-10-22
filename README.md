@@ -40,6 +40,8 @@ All seeded accounts use the locally generated `DEMO_PASSWORD`. Use separate brow
 | `treasury@axiom.demo`   | Treasury Officer                | Documentary deposits and fiscal assessments     |
 | `auditor@axiom.demo`    | Auditor                         | Read access to the workspace and audit trail    |
 
+If a Render login rejects the configured DEMO_PASSWORD after it was changed, use the explicit [demo password recovery command](docs/deploy-render.md#recover-a-rejected-demonstration-password); normal startup does not overwrite account passwords.
+
 The database starts with 3 producers, 2 trading companies, 2 terminals, 2 independent inspection organizations, a regulator and Treasury; 12 batches/cargos, commercial and inspection records, generated PDF evidence and three scenarios. Automated integration/E2E checks add clearly named test records to the development database and audit trail. Use an isolated database when you want a pristine demo portfolio.
 
 ## Complete workflows
