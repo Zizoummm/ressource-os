@@ -1,0 +1,40 @@
+# Render Blueprint: persistent demonstration application and managed PostgreSQL.
+# Review Render's current prices before creating these paid resources.
+services:
+  - type: web
+    name: axiom-resourceos-test
+    runtime: node
+    region: oregon
+    plan: starter
+    buildCommand: npm ci --include=dev && npm run db:generate && npm run build
+    startCommand: npm run start:hosted
+    healthCheckPath: /api/health
+    disk:
+      name: resourceos-evidence
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: axiom-resourceos-db
+          property: connectionString
+      - key: DRT_SECRET
+        generateValue: true
+      - key: DEMO_PASSWORD
+        generateValue: true
+      - key: ALLOW_DEMO_SEED
+        value: "true"
+      - key: RESOURCEOS_DATA_DIR
+        value: /var/data/resourceos
+    # APP_URL is derived from Render's RENDER_EXTERNAL_URL; set APP_URL only for a custom HTTPS domain.
+databases:
+  - name: axiom-resourceos-db
+    databaseName: resourceos
+    user: resourceos
+    region: oregon
+    plan: basic-256mb
+    ipAllowList: []

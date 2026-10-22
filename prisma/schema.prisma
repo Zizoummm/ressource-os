@@ -1,0 +1,338 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id               String                   @id @default(cuid())
+  tenantId         String
+  name             String
+  type             String
+  jurisdiction     String
+  registration     String                   @unique
+  verified         Boolean                  @default(false)
+  beneficialOwners String
+  demo             Boolean                  @default(true)
+  users            OrganizationMembership[]
+  licenses         License[]
+  assets           ResourceAsset[]
+  batches          ProductionBatch[]
+  cargoes          Cargo[]
+  createdAt        DateTime                 @default(now())
+
+  @@index([tenantId])
+}
+
+model User {
+  id           String                   @id @default(cuid())
+  email        String                   @unique
+  name         String
+  passwordHash String
+  active       Boolean                  @default(true)
+  memberships  OrganizationMembership[]
+  sessions     Session[]
+  createdAt    DateTime                 @default(now())
+}
+
+model OrganizationMembership {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  roles          String[]
+  user           User         @relation(fields: [userId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([userId, organizationId])
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model License {
+  id             String       @id @default(cuid())
+  organizationId String
+  reference      String       @unique
+  expiresAt      DateTime
+  verified       Boolean      @default(false)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+}
+
+model ResourceAsset {
+  id             String            @id @default(cuid())
+  organizationId String
+  name           String
+  resourceType   String            @default("PETROLEUM")
+  location       String
+  authorized     Boolean           @default(false)
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  batches        ProductionBatch[]
+}
+
+model ProductionBatch {
+  id             String            @id @default(cuid())
+  resourceId     String            @unique
+  organizationId String
+  assetId        String
+  grade          String
+  quantity       Decimal           @db.Decimal(24, 6)
+  unit           String            @default("bbl")
+  storage        String
+  productionDate DateTime
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  asset          ResourceAsset     @relation(fields: [assetId], references: [id])
+  movements      CustodyEvent[]
+  allocations    CargoAllocation[]
+  createdAt      DateTime          @default(now())
+}
+
+model CustodyEvent {
+  id           String          @id @default(cuid())
+  batchId      String
+  fromLocation String
+  toLocation   String
+  quantity     Decimal         @db.Decimal(24, 6)
+  actorId      String
+  reference    String
+  batch        ProductionBatch @relation(fields: [batchId], references: [id])
+  createdAt    DateTime        @default(now())
+}
+
+model Cargo {
+  id             String                 @id @default(cuid())
+  reference      String                 @unique
+  organizationId String
+  createdBy      String
+  grade          String
+  quantity       Decimal                @db.Decimal(24, 6)
+  value          Decimal                @db.Decimal(24, 2)
+  currency       String                 @default("USD")
+  terminal       String
+  vessel         String
+  shipmentDate   DateTime
+  status         String                 @default("DRAFT")
+  version        Int                    @default(1)
+  testOnly       Boolean                @default(false)
+  organization   Organization           @relation(fields: [organizationId], references: [id])
+  allocations    CargoAllocation[]
+  inspections    Inspection[]
+  contract       TradeContract?
+  insurance      InsuranceRecord?
+  guarantee      GuaranteeRecord?
+  deposit        TreasuryDeposit?
+  fiscal         FiscalAssessment?
+  decisions      VerificationDecision[]
+  documents      EvidenceDocument[]
+  approvals      Approval[]
+  tokens         ReleaseToken[]
+  risks          RiskFlag[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+}
+
+model CargoAllocation {
+  id        String          @id @default(cuid())
+  cargoId   String
+  batchId   String
+  location  String
+  quantity  Decimal         @db.Decimal(24, 6)
+  cargo     Cargo           @relation(fields: [cargoId], references: [id])
+  batch     ProductionBatch @relation(fields: [batchId], references: [id])
+  createdAt DateTime        @default(now())
+}
+
+model Counterparty {
+  id               String          @id @default(cuid())
+  tenantId         String
+  name             String
+  type             String
+  jurisdiction     String
+  registration     String          @unique
+  beneficialOwners String
+  verified         Boolean         @default(false)
+  contracts        TradeContract[]
+}
+
+model TradeContract {
+  id           String       @id @default(cuid())
+  cargoId      String       @unique
+  buyerId      String
+  reference    String       @unique
+  quantity     Decimal      @db.Decimal(24, 6)
+  price        Decimal      @db.Decimal(24, 6)
+  currency     String       @default("USD")
+  incoterm     String
+  paymentTerms String
+  status       String       @default("DECLARED")
+  reviewerId   String?
+  cargo        Cargo        @relation(fields: [cargoId], references: [id])
+  buyer        Counterparty @relation(fields: [buyerId], references: [id])
+  updatedAt    DateTime     @updatedAt
+}
+
+model Inspection {
+  id                      String   @id @default(cuid())
+  cargoId                 String
+  inspectorId             String
+  inspectorOrganizationId String
+  measuredQuantity        Decimal  @db.Decimal(24, 6)
+  quality                 String
+  samplingReference       String
+  reportReference         String
+  status                  String   @default("SUBMITTED")
+  inspectedAt             DateTime @default(now())
+  expiresAt               DateTime
+  cargo                   Cargo    @relation(fields: [cargoId], references: [id])
+}
+
+model EvidenceDocument {
+  id          String   @id @default(cuid())
+  cargoId     String
+  uploadedBy  String
+  filename    String
+  storageKey  String   @unique
+  contentType String
+  size        Int
+  sha256      String
+  reference   String
+  provenance  String   @default("SELF_DECLARED")
+  status      String   @default("SUBMITTED")
+  cargo       Cargo    @relation(fields: [cargoId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model VerificationDecision {
+  id                String   @id @default(cuid())
+  cargoId           String
+  kind              String
+  status            String
+  evidenceReference String
+  reviewerId        String
+  reason            String
+  provenance        String   @default("SIMULATED")
+  expiresAt         DateTime
+  cargo             Cargo    @relation(fields: [cargoId], references: [id])
+  updatedAt         DateTime @updatedAt
+
+  @@unique([cargoId, kind])
+}
+
+model InsuranceRecord {
+  id         String   @id @default(cuid())
+  cargoId    String   @unique
+  reference  String
+  insurer    String
+  coverage   Decimal  @db.Decimal(24, 2)
+  expiresAt  DateTime
+  status     String
+  reviewerId String
+  cargo      Cargo    @relation(fields: [cargoId], references: [id])
+}
+
+model GuaranteeRecord {
+  id          String   @id @default(cuid())
+  cargoId     String   @unique
+  reference   String
+  institution String
+  amount      Decimal  @db.Decimal(24, 2)
+  expiresAt   DateTime
+  status      String
+  reviewerId  String
+  cargo       Cargo    @relation(fields: [cargoId], references: [id])
+}
+
+model TreasuryDeposit {
+  id                String   @id @default(cuid())
+  cargoId           String   @unique
+  rate              Decimal  @db.Decimal(8, 6)
+  required          Decimal  @db.Decimal(24, 2)
+  declared          Decimal  @db.Decimal(24, 2)
+  confirmed         Decimal  @db.Decimal(24, 2)
+  evidenceReference String
+  reviewerId        String
+  cargo             Cargo    @relation(fields: [cargoId], references: [id])
+  updatedAt         DateTime @updatedAt
+}
+
+model FiscalAssessment {
+  id                String   @id @default(cuid())
+  cargoId           String   @unique
+  royaltyRate       Decimal  @db.Decimal(8, 6)
+  dutyRate          Decimal  @db.Decimal(8, 6)
+  otherRate         Decimal  @db.Decimal(8, 6)
+  assessed          Decimal  @db.Decimal(24, 2)
+  documentedPaid    Decimal  @db.Decimal(24, 2)
+  reviewerId        String
+  evidenceReference String
+  cargo             Cargo    @relation(fields: [cargoId], references: [id])
+  updatedAt         DateTime @updatedAt
+}
+
+model Approval {
+  id        String   @id @default(cuid())
+  cargoId   String
+  version   Int
+  actorId   String
+  decision  String
+  reason    String
+  expiresAt DateTime
+  cargo     Cargo    @relation(fields: [cargoId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model ReleaseToken {
+  id        String    @id @default(cuid())
+  cargoId   String
+  version   Int
+  issuerId  String
+  token     String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  cargo     Cargo     @relation(fields: [cargoId], references: [id])
+  createdAt DateTime  @default(now())
+
+  @@index([cargoId, version])
+}
+
+model AuditEvent {
+  id             String   @id @default(cuid())
+  tenantId       String
+  organizationId String
+  actorId        String
+  action         String
+  targetId       String
+  metadata       Json
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+model RiskFlag {
+  id        String   @id @default(cuid())
+  cargoId   String
+  kind      String
+  reason    String
+  resolved  Boolean  @default(false)
+  cargo     Cargo    @relation(fields: [cargoId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([cargoId, kind])
+}
+
+model Policy {
+  tenantId        String  @id
+  depositRate     Decimal @default(0.01) @db.Decimal(8, 6)
+  royaltyRate     Decimal @default(0.05) @db.Decimal(8, 6)
+  dutyRate        Decimal @default(0.02) @db.Decimal(8, 6)
+  otherRate       Decimal @default(0) @db.Decimal(8, 6)
+  discrepancyRate Decimal @default(0.02) @db.Decimal(8, 6)
+  tokenMinutes    Int     @default(15)
+}
