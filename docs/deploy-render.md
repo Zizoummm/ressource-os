@@ -2,10 +2,13 @@
 
 The root `render.yaml` Blueprint defines one Node web service, one managed PostgreSQL database and a persistent disk for evidence/journals. This is an authenticated demonstration with fictional records. The selected persistent service and database plans are paid; Render shows current pricing before creating resources. Review those prices in your account. There is no physical valve actuation.
 
+The database declares 5 GB of storage explicitly (`diskSizeGB: 5`). This is separate from the web service's 1 GB evidence disk.
+
 ## Create the services
 
 1. Sign in to Render and connect the GitHub account that can access `Zizoummm/ressource-os`.
 2. Use **New → Blueprint**, choose that repository, branch **main**, and the root `render.yaml`. Alternatively use the repository's Deploy to Render link in the README.
+   Use `resourceos-test` as the Blueprint name and `render.yaml` as the Blueprint path (or leave the path empty to use the root file).
 3. Review the web service, PostgreSQL database, persistent disk and current prices, then create the Blueprint.
 4. Wait for the web service to become **Live**. The build installs dependencies, generates Prisma and compiles Next.js. Startup applies checksum-verified migrations, seeds a new demo database and listens on Render's `PORT`. The public `/api/health` returns 200 only when the database policy is present.
 5. Open the service's actual HTTPS URL shown by Render. Its automatic `RENDER_EXTERNAL_URL` supplies the allowed origin, Secure cookie setting and PDF verification links. No localhost URL is used by the hosted instance.

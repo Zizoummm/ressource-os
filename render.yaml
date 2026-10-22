@@ -37,4 +37,5 @@ databases:
     user: resourceos
     region: oregon
     plan: basic-256mb
+    diskSizeGB: 5
     ipAllowList: []
